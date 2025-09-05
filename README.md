@@ -19,4 +19,7 @@ For now, you can:
 3. Run Project
    ```bash
    haxelib run hxwell test jvm
+   haxelib run hxwell test cpp
+   haxelib run hxwell build php
+   haxelib run hxwell test neko # Slow
    ```
