@@ -1,4 +1,4 @@
-package hx.well.handler.api;
+package hx.well.handler;
 
 import hx.well.handler.AbstractHandler;
 import hx.well.http.AbstractResponse;
