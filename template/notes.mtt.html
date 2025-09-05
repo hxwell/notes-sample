@@ -90,8 +90,8 @@
 <header>
     <h1>Notes</h1>
     <div class="right">
-        <button id="newNoteTop" class="btn icon" title="Create a new note">
-            <span>New</span>
+        <button id="logout" class="btn icon" title="Logout">
+            <span>Logout</span>
         </button>
     </div>
 </header>
@@ -323,7 +323,7 @@
 
     // --- Wire up UI events
     $('#newNote').addEventListener('click', createNote);
-    $('#newNoteTop').addEventListener('click', createNote);
+    $('#logout').addEventListener('click', () => window.location.href = "/logout");
     $('#refresh').addEventListener('click', () => loadNotes(state.currentId));
     saveBtn.addEventListener('click', saveCurrent);
     delBtn.addEventListener('click', deleteCurrent);
