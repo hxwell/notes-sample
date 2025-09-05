@@ -25,9 +25,10 @@ class RegisterHandler extends AbstractHandler {
         var user = User.instance.create(["username" => username, "password" => Hash.make(password)]);
         auth().login(user);
 
-        return ResponseBuilder.asJson({
+        return {
             success: true,
-            user: user
-        });
+            user: user,
+            redirect: "/"
+        };
     }
 }

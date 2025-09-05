@@ -25,7 +25,8 @@ class LoginHandler extends AbstractHandler {
         var user:User = auth().user();
         return {
             success: true,
-            user: user
+            user: user,
+            redirect: "/"
         };
     }
 }
