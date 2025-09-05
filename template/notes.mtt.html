@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Notes • Minimal Server-backed App</title>
+    <style>
+        /* ===== Minimal, clean styling (same vibe as the auth page) ===== */
+        :root {
+            --bg: #ffffff;
+            --fg: #111111;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #111111;
+            --error: #b91c1c;
+            --ok: #065f46;
+            --panel: #f8f9fb;
+            --radius: 14px;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            font: 16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+            Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            color: var(--fg); background: var(--bg);
+            display: grid; grid-template-rows: auto 1fr; height: 100%;
+        }
+
+        header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px 16px; border-bottom: 1px solid var(--border);
+            background: var(--bg);
+        }
+        header h1 { font-size: 18px; margin: 0; }
+
+        .app {
+            display: grid; grid-template-columns: 280px 1fr; min-height: 0; /* allow children to shrink */
+        }
+
+        /* Sidebar */
+        .sidebar {
+            border-right: 1px solid var(--border); background: var(--panel);
+            display: grid; grid-template-rows: auto 1fr; min-height: 0;
+        }
+        .sidebar .controls { padding: 12px; border-bottom: 1px solid var(--border); display:flex; gap:8px; }
+        .btn {
+            border: 1px solid var(--accent); background: var(--accent); color: #fff;
+            padding: 8px 10px; border-radius: 10px; cursor: pointer; font-weight: 700;
+        }
+        .btn.secondary { background: #fff; color: var(--fg); border-color: var(--border); }
+        .btn.icon { display: inline-flex; align-items: center; gap: 8px; }
+        .btn[disabled] { opacity: .6; cursor: progress; }
+
+        .notes-list { overflow: auto; padding: 6px; list-style: none; margin: 0; }
+        .note-item { display: grid; gap: 6px; padding: 10px; border:1px solid transparent; border-radius: 10px; cursor: pointer; }
+        .note-item:hover { background:#fff; border-color: var(--border); }
+        .note-item[aria-selected="true"] { background:#fff; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(17,17,17,.08) inset; }
+        .note-title { font-weight: 700; }
+        .note-sub { font-size: 12px; color: var(--muted); }
+
+        /* Editor */
+        .editor { min-width: 0; display: grid; grid-template-rows: auto auto 1fr; }
+        .editor .bar { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .editor .status { margin-left: auto; font-size: 12px; color: var(--muted); }
+        .editor .alert { margin-left: 12px; padding: 6px 8px; border-radius: 10px; font-size: 13px; }
+        .alert.error { background: #fee2e2; color: var(--error); border: 1px solid #fecaca; }
+        .alert.success { background: #dcfce7; color: var(--ok); border: 1px solid #bbf7d0; }
+
+        .title-row { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+        .title-input {
+            width: 100%; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px;
+            font-size: 16px; font-weight: 700; outline: none; background: #fff;
+        }
+        .title-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(17,17,17,.08); }
+
+        .content {
+            padding: 16px; min-height: 0; display: grid;
+        }
+        .textarea {
+            width: 100%; height: 100%; resize: none; border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+            font: inherit; line-height: 1.6; outline: none;
+        }
+        .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(17,17,17,.08); }
+
+        .empty { display: grid; place-items: center; color: var(--muted); }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Notes</h1>
+    <div class="right">
+        <button id="newNoteTop" class="btn icon" title="Create a new note">
+            <span>New</span>
+        </button>
+    </div>
+</header>
+
+<div class="app">
+    <!-- ===== Sidebar: titles like a chat list ===== -->
+    <aside class="sidebar" aria-label="Notes list">
+        <div class="controls">
+            <button id="newNote" class="btn icon">New</button>
+            <button id="refresh" class="btn secondary">Refresh</button>
+        </div>
+        <ul id="notesList" class="notes-list" role="listbox" aria-label="Notes"></ul>
+    </aside>
+
+    <!-- ===== Editor area ===== -->
+    <section class="editor">
+        <div class="bar">
+            <button id="saveBtn" class="btn icon">Save</button>
+            <button id="deleteBtn" class="btn secondary">Delete</button>
+            <span id="barAlert" class="alert hidden"></span>
+            <span id="status" class="status">Idle</span>
+        </div>
+        <div class="title-row">
+            <input id="titleInput" class="title-input" placeholder="Untitled" />
+        </div>
+        <div class="content">
+            <textarea id="contentInput" class="textarea" placeholder="Start writing…"></textarea>
+        </div>
+    </section>
+</div>
+
+<script>
+    // ===== Server-backed Notes App =====
+    // All mutations happen via HTTP. The UI only reflects server responses.
+
+    // --- CONFIG: Adjust to your backend.
+    const CONFIG = {
+        // Split endpoints (no shared base). Adjust to your backend routes.
+        endpoints: {
+            list: '/api/notes/list',        // GET -> [{id, title}]
+            get: '/api/notes/get',          // GET with ?id=ID -> {id, title, content}
+            create: '/api/notes/create',    // POST body {title, content} -> {id, title, content}
+            update: '/api/notes/update',    // POST body {id, title, content} -> {id, title, content}
+            delete: '/api/notes/delete',    // POST body {id} -> { ok: true }
+        }
+    };
+
+    // --- State kept in memory to coordinate UI.
+    const state = {
+        notes: [],       // list of {id, title}
+        currentId: null, // selected note id
+        dirty: false,    // unsaved editor changes
+        saving: false,
+        autoSaveTimer: null,
+    };
+
+    // --- Helpers: DOM shortcuts
+    const $ = (sel) => document.querySelector(sel);
+    const listEl = $('#notesList');
+    const titleEl = $('#titleInput');
+    const contentEl = $('#contentInput');
+    const statusEl = $('#status');
+    const alertEl = $('#barAlert');
+    const saveBtn = $('#saveBtn');
+    const delBtn = $('#deleteBtn');
+
+    function setStatus(text) { statusEl.textContent = text || 'Idle'; }
+    function showAlert(type, message) {
+        alertEl.textContent = message; alertEl.className = `alert ${type}`; alertEl.classList.remove('hidden');
+        clearTimeout(showAlert._t); showAlert._t = setTimeout(() => alertEl.classList.add('hidden'), 2500);
+    }
+    function truncate(s, n=28) { return s?.length > n ? s.slice(0, n-1) + '…' : (s || 'Untitled'); }
+
+    // Safe JSON parse (works with empty body/204)
+    async function parseJSON(res) {
+        const text = await res.text();
+        if (!text) return {};
+        try { return JSON.parse(text); } catch { return { raw: text }; }
+    }
+
+    async function api(url, options={}) {
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: CONFIG.credentials,
+                ...options,
+            });
+            const data = await parseJSON(res);
+            if (!res.ok) {
+                const message = data?.error || data?.message || `Request failed (${res.status})`;
+                return { ok:false, error: message, status: res.status, data };
+            }
+            return { ok:true, data, status: res.status };
+        } catch (e) {
+            return { ok:false, error: 'Network error. Please try again.' };
+        }
+    }
+
+    // --- Rendering: sidebar list
+    function renderList() {
+        listEl.innerHTML = '';
+        if (!state.notes.length) {
+            const li = document.createElement('li');
+            li.className = 'empty';
+            li.textContent = 'No notes yet';
+            listEl.appendChild(li);
+            return;
+        }
+        for (const n of state.notes) {
+            const li = document.createElement('li');
+            li.className = 'note-item';
+            li.setAttribute('role','option');
+            li.dataset.id = n.id;
+            li.setAttribute('aria-selected', String(n.id === state.currentId));
+            li.innerHTML = `<div class="note-title">${escapeHtml(truncate(n.title, 40))}</div>`;
+            li.addEventListener('click', () => selectNote(n.id));
+            listEl.appendChild(li);
+        }
+    }
+
+    function updateListSelection() {
+        listEl.querySelectorAll('.note-item').forEach((el) => {
+            el.setAttribute('aria-selected', String(el.dataset.id == state.currentId));
+        });
+    }
+
+    // --- Load notes and select the first by default
+    async function loadNotes(selectId=null) {
+        setStatus('Loading notes…');
+        const r = await api(CONFIG.endpoints.list); // GET /notes/list
+        if (!r.ok) { showAlert('error', r.error); setStatus('Idle'); return; }
+        state.notes = Array.isArray(r.data) ? r.data : [];
+        renderList();
+        const firstId = selectId || state.notes[0]?.id || null;
+        if (firstId) await selectNote(firstId, { force: true }); else showEmptyEditor();
+        setStatus('Ready');
+    }
+
+    function showEmptyEditor() {
+        state.currentId = null; updateListSelection();
+        titleEl.value = ''; contentEl.value = '';
+        state.dirty = false; setStatus('No note selected');
+    }
+
+    // --- Select a note; save first if dirty
+    async function selectNote(id, opts={}) {
+        if (state.dirty && !opts.force) {
+            const saved = await saveCurrent();
+            if (!saved) return; // abort switch on failure
+        }
+        setStatus('Loading…');
+        const r = await api(CONFIG.endpoints.get, { method:'POST', body: JSON.stringify({ id }) }); // POST /api/notes/get
+        if (!r.ok) { showAlert('error', r.error); setStatus('Ready'); return; }
+        state.currentId = id; updateListSelection();
+        titleEl.value = r.data.title || '';
+        contentEl.value = r.data.content || '';
+        state.dirty = false; setStatus('Viewing');
+    }
+
+    // --- Create a new note (server is source of truth)
+    async function createNote() {
+        if (state.dirty) { const ok = await saveCurrent(); if (!ok) return; }
+        setStatus('Creating…');
+        const body = JSON.stringify({ title: 'Untitled', content: '' });
+        const r = await api(CONFIG.endpoints.create, { method:'POST', body });
+        if (!r.ok) { showAlert('error', r.error); setStatus('Ready'); return; }
+        // Reload list and select the newly created note
+        await loadNotes(r.data.id);
+        showAlert('success', 'Note created');
+    }
+
+    // --- Save currently loaded note
+    async function saveCurrent() {
+        if (!state.currentId) { return true; }
+        if (!state.dirty) { return true; }
+        state.saving = true; setStatus('Saving…'); saveBtn.disabled = true;
+        const payload = { title: titleEl.value.trim() || 'Untitled', content: contentEl.value };
+        const r = await api(CONFIG.endpoints.update, { method:'POST', body: JSON.stringify({ id: state.currentId, ...payload }) });
+        state.saving = false; saveBtn.disabled = false;
+        if (!r.ok) { showAlert('error', r.error); setStatus('Ready'); return false; }
+        // Update list title
+        const item = state.notes.find(n => n.id === state.currentId);
+        if (item) { item.title = r.data.title;}
+        renderList(); updateListSelection();
+        state.dirty = false; setStatus('Saved'); showAlert('success', 'Saved');
+        return true;
+    }
+
+    // --- Delete current note
+    async function deleteCurrent() {
+        if (!state.currentId) return;
+        if (!confirm('Delete this note?')) return;
+        setStatus('Deleting…'); delBtn.disabled = true;
+        const id = state.currentId;
+        const r = await api(CONFIG.endpoints.delete, { method:'POST', body: JSON.stringify({ id }) });
+        delBtn.disabled = false;
+        if (!r.ok) { showAlert('error', r.error); setStatus('Ready'); return; }
+        // Remove from local list
+        const idx = state.notes.findIndex(n => n.id === id);
+        if (idx >= 0) state.notes.splice(idx, 1);
+        renderList();
+        // Select adjacent note
+        const next = state.notes[idx] || state.notes[idx-1];
+        if (next) await selectNote(next.id, { force: true }); else showEmptyEditor();
+        setStatus('Deleted'); showAlert('success', 'Note deleted');
+    }
+
+    // --- Auto-save on idle typing
+    function scheduleAutoSave() {
+        if (state.autoSaveTimer) clearTimeout(state.autoSaveTimer);
+        state.autoSaveTimer = setTimeout(() => {
+            if (state.dirty) saveCurrent();
+        }, 800);
+    }
+
+    function markDirty() { state.dirty = true; setStatus('Editing…'); scheduleAutoSave(); }
+
+    // --- Keyboard shortcut: Ctrl/Cmd+S to save
+    window.addEventListener('keydown', (e) => {
+        const mod = e.metaKey || e.ctrlKey;
+        if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); saveCurrent(); }
+    });
+
+    // --- Utilities
+    function escapeHtml(s) {
+        return String(s || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+    }
+
+    // --- Wire up UI events
+    $('#newNote').addEventListener('click', createNote);
+    $('#newNoteTop').addEventListener('click', createNote);
+    $('#refresh').addEventListener('click', () => loadNotes(state.currentId));
+    saveBtn.addEventListener('click', saveCurrent);
+    delBtn.addEventListener('click', deleteCurrent);
+    titleEl.addEventListener('input', markDirty);
+    contentEl.addEventListener('input', markDirty);
+
+    // --- Boot: load notes and select first
+    loadNotes();
+</script>
+</body>
+</html>

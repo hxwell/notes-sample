@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Auth • Login & Register</title>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --fg: #111111;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #111111;
+            --error: #b91c1c;
+            --ok: #065f46;
+            --radius: 14px;
+        }
+        * { box-sizing: border-box; }
+        html, body { height: 100%; }
+        body {
+            margin: 0;
+            font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell,
+            Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+            background: var(--bg);
+            color: var(--fg);
+            display: grid;
+            place-items: center;
+            padding: 24px;
+        }
+        .card {
+            width: 100%;
+            max-width: 420px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 22px;
+            box-shadow: 0 10px 24px rgba(0,0,0,0.06);
+            background: var(--bg);
+        }
+        .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 18px; }
+        .tab-btn {
+            border: 1px solid var(--border);
+            background: #f8f9fb;
+            padding: 10px 12px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .tab-btn[aria-selected="true"] { background: #111; color: #fff; border-color: #111; }
+
+        form { display: grid; gap: 12px; }
+        label { font-size: 14px; color: var(--muted); }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 12px;
+            outline: none;
+        }
+        input:focus { border-color: #111; box-shadow: 0 0 0 3px rgba(17,17,17,0.08); }
+
+        .row { display: grid; gap: 6px; }
+        .actions { display: flex; gap: 10px; align-items: center; justify-content: space-between; }
+        .btn {
+            border: 1px solid #111;
+            background: #111;
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+        .btn[disabled] { opacity: 0.6; cursor: progress; }
+
+        .note { font-size: 12px; color: var(--muted); }
+
+        .alert { border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+        .alert.error { background: #fee2e2; color: var(--error); border: 1px solid #fecaca; }
+        .alert.success { background: #dcfce7; color: var(--ok); border: 1px solid #bbf7d0; }
+        .hidden { display: none !important; }
+
+        .footer { margin-top: 14px; font-size: 12px; color: var(--muted); text-align: center; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+    </style>
+</head>
+<body>
+<main class="card" role="main">
+    <div class="tabs" role="tablist" aria-label="Auth Tabs">
+        <button id="tab-login" class="tab-btn" role="tab" aria-selected="true" aria-controls="panel-login">Login</button>
+        <button id="tab-register" class="tab-btn" role="tab" aria-selected="false" aria-controls="panel-register">Register</button>
+    </div>
+
+    <!-- LOGIN PANEL -->
+    <section id="panel-login" role="tabpanel" aria-labelledby="tab-login">
+        <form id="login-form" data-endpoint="/api/login" action="/api/login" method="post" novalidate>
+            <div class="row">
+                <label for="login-username">Username</label>
+                <input id="login-username" name="username" type="text" placeholder="yourusername" required autocomplete="username" />
+            </div>
+            <div class="row">
+                <label for="login-password">Password</label>
+                <input id="login-password" name="password" type="password" placeholder="••••••••" required autocomplete="current-password" />
+            </div>
+
+            <div id="login-alert" class="alert hidden" aria-live="polite"></div>
+
+            <div class="actions">
+                <button id="login-btn" class="btn" type="submit">Sign in</button>
+                <span class="note">By continuing, you agree to the Terms.</span>
+            </div>
+        </form>
+    </section>
+
+    <!-- REGISTER PANEL -->
+    <section id="panel-register" class="hidden" role="tabpanel" aria-labelledby="tab-register" hidden>
+        <form id="register-form" data-endpoint="/api/register" action="/api/register" method="post" novalidate>
+            <div class="row">
+                <label for="reg-username">Username</label>
+                <input id="reg-username" name="username" type="text" placeholder="yourusername" required autocomplete="username" />
+            </div>
+            <div class="row">
+                <label for="reg-password">Password</label>
+                <input id="reg-password" name="password" type="password" placeholder="••••••••" minlength="6" required autocomplete="new-password" />
+            </div>
+            <div class="row">
+                <label for="reg-password2">Confirm password</label>
+                <input id="reg-password2" name="password2" type="password" placeholder="••••••••" minlength="6" required autocomplete="new-password" />
+            </div>
+
+            <div id="register-alert" class="alert hidden" aria-live="polite"></div>
+
+            <div class="actions">
+                <button id="register-btn" class="btn" type="submit">Create account</button>
+                <span class="note">Password must be at least 6 characters.</span>
+            </div>
+        </form>
+    </section>
+
+    <div class="footer">Minimal demo. Customize endpoints, payload, and redirects below in JS.</div>
+</main>
+
+<script>
+    const CONFIG = {
+        endpoints: {
+            login: '/api/login',
+            register: '/api/register',
+        },
+        defaultRedirect: '/'
+    };
+
+    const tabLogin = document.getElementById('tab-login');
+    const tabRegister = document.getElementById('tab-register');
+    const panelLogin = document.getElementById('panel-login');
+    const panelRegister = document.getElementById('panel-register');
+
+    function switchTab(which) {
+        const isLogin = which === 'login';
+        tabLogin.setAttribute('aria-selected', String(isLogin));
+        tabRegister.setAttribute('aria-selected', String(!isLogin));
+        panelLogin.classList.toggle('hidden', !isLogin);
+        panelRegister.classList.toggle('hidden', isLogin);
+        panelRegister.hidden = isLogin;
+        panelLogin.hidden = !isLogin;
+    }
+
+    tabLogin.addEventListener('click', () => switchTab('login'));
+    tabRegister.addEventListener('click', () => switchTab('register'));
+
+    function setAlert(el, type, message) {
+        if (!el) return;
+        el.textContent = message;
+        el.classList.remove('hidden', 'error', 'success');
+        el.classList.add('alert', type);
+    }
+    function clearAlert(el) {
+        if (!el) return;
+        el.textContent = '';
+        el.classList.add('hidden');
+        el.classList.remove('error', 'success');
+    }
+
+    function setLoading(btn, isLoading) {
+        if (!btn) return;
+        btn.disabled = !!isLoading;
+        btn.textContent = isLoading ? 'Please wait…' : btn.dataset.defaultText || btn.textContent;
+    }
+
+    async function safeParseJSON(response) {
+        const text = await response.text();
+        if (!text) return {};
+        try { return JSON.parse(text); } catch { return { raw: text }; }
+    }
+
+    async function handleSubmit(event) {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const alertEl = form.id === 'login-form' ? document.getElementById('login-alert') : document.getElementById('register-alert');
+        clearAlert(alertEl);
+
+        if (form.id === 'register-form') {
+            const p1 = form.querySelector('#reg-password').value;
+            const p2 = form.querySelector('#reg-password2').value;
+            if (p1 !== p2) {
+                setAlert(alertEl, 'error', 'Passwords do not match.');
+                return;
+            }
+        }
+
+        const formData = new FormData(form);
+        const payload = Object.fromEntries(formData.entries());
+
+        const endpointAttr = form.getAttribute('data-endpoint');
+        const endpoint = endpointAttr || (form.id === 'login-form' ? CONFIG.endpoints.login : CONFIG.endpoints.register);
+
+        setLoading(submitBtn, true);
+        submitBtn.dataset.defaultText = submitBtn.dataset.defaultText || submitBtn.textContent;
+
+        try {
+            const res = await fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await safeParseJSON(res);
+
+            if (!res.ok) {
+                const message = (data && (data.error || data.message)) || `Request failed (${res.status}).`;
+                setAlert(alertEl, 'error', message);
+                return;
+            }
+
+            // If server returns a redirect -> success, otherwise if message exists -> failure
+            if (data && data.redirect) {
+                const successMsg = 'Success. Redirecting…';
+                setAlert(alertEl, 'success', successMsg);
+                setTimeout(() => { window.location.assign(data.redirect); }, 600);
+            } else if (data && data.message) {
+                setAlert(alertEl, 'error', data.message);
+            } else {
+                setAlert(alertEl, 'error', 'Unexpected response.');
+            }
+        } catch (err) {
+            setAlert(alertEl, 'error', 'Network error. Please try again.');
+        } finally {
+            setLoading(submitBtn, false);
+        }
+    }
+
+    document.getElementById('login-form').addEventListener('submit', handleSubmit);
+    document.getElementById('register-form').addEventListener('submit', handleSubmit);
+</script>
+</body>
+</html>
