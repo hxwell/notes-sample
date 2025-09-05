@@ -18,5 +18,5 @@ For now, you can:
    ```
 3. Run Project
    ```bash
-    haxelib run hxwell test jvm
+   haxelib run hxwell test jvm
    ```
