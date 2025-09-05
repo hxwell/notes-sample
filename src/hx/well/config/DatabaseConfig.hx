@@ -7,8 +7,8 @@ class DatabaseConfig implements IConfig {
 
     public var connections:StringMap<ConnectionConfig> = [
         "default" => {
-            "driver": env("DB_DRIVER", "sqlite"),
-            "path": env("DB_PATH", "notes.db"),
+            "driver": env("DB_DRIVER"),
+            "path": env("DB_PATH"),
         }
     ];
 }
