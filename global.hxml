@@ -1,4 +1,3 @@
 -cp src
 -D analyzer-optimize
 -D env_file=.env
--D dump-dependencies
